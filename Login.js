@@ -9,6 +9,7 @@ const PORT = 3000;
 // Middleware to parse incoming JSON request bodies (no need for body-parser in modern Express)
 app.use(express.json());
 
+
 // Mock user data (in a real app, this would come from a database)
 // Each user is identified by their email and has a password
 const users = [
