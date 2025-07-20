@@ -20,7 +20,7 @@ class ErrorHandler {
         res.status(statusCode).json({
             success: false,
             error: {
-                message: message,
+                message: message,  
                 code: errorCode,
                 timestamp: new Date().toISOString()
             }
