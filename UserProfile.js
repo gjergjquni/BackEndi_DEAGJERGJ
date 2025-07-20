@@ -1,3 +1,4 @@
+
 class UserProfile {
     /**
      * @param {string} userId - The unique ID for the user.

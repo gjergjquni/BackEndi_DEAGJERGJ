@@ -36,6 +36,7 @@ class ErrorHandler {
         CONFLICT: (message = 'Konflikt me të dhënat ekzistuese') => ErrorHandler.createError(message, 409, 'CONFLICT'),
         RATE_LIMIT_EXCEEDED: (message = 'Kërkesa ka tejkaluar limitin') => ErrorHandler.createError(message, 429, 'RATE_LIMIT_EXCEEDED'),
         INTERNAL_ERROR: (message = 'Gabim i brendshëm i serverit') => ErrorHandler.createError(message, 500, 'INTERNAL_ERROR'),
+        SERVER_ERROR: (message = 'Gabim i serverit') => ErrorHandler.createError(message, 500, 'SERVER_ERROR'),
         SERVICE_UNAVAILABLE: (message = 'Shërbimi nuk është i disponueshëm') => ErrorHandler.createError(message, 503, 'SERVICE_UNAVAILABLE')
     };
 

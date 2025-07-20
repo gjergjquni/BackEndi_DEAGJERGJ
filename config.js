@@ -32,6 +32,13 @@ const config = {
         maxTransactionsPerRequest: 1000
     },
 
+    // Konfigurimi i email
+    email: {
+        service: 'gmail',
+        from: process.env.EMAIL_USER || 'noreply@elioti.com',
+        verificationCodeExpiry: 10 * 60 * 1000 // 10 minutes
+    },
+
     // Konfigurimi i kategorive të transaksioneve
     transactionCategories: {
         income: [
