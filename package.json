@@ -1,5 +1,23 @@
 {
+  "name": "elioti-backend",
+  "version": "1.0.0",
+  "description": "Backend për platformën financiare Elioti",
+  "main": "Login.js",
+  "scripts": {
+    "start": "node Login.js",
+    "dev": "nodemon Login.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
   "dependencies": {
-    "express": "^5.1.0"
-  }
+    "bcrypt": "^6.0.0",
+    "body-parser": "^2.2.0",
+    "express": "^5.1.0",
+    "cors": "^2.8.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.0"
+  },
+  "keywords": ["finance", "albania", "budget", "transactions"],
+  "author": "Elioti Team",
+  "license": "MIT"
 }
