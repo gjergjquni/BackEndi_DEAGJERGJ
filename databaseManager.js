@@ -7,60 +7,69 @@ const sqlite3 = require('sqlite3');
 const path = require('path');
 const crypto = require('crypto');
 const config = require('./config');
+const EventEmitter = require('events');
+const fs = require('fs');
 
-class DatabaseManager {
+class DatabaseManager extends EventEmitter {
     constructor() {
+        super();
         this.db = null;
         this.isConnected = false;
         this.dbPath = path.join(__dirname, 'data', 'elioti.db');
         this.encryptionKey = process.env.DB_ENCRYPTION_KEY || config.database.encryptionKey;
-        
+        this.queryQueue = [];
         if (!this.encryptionKey) {
             throw new Error('Database encryption key is required');
         }
     }
 
     /**
-     * Connect to SQLCipher database
+     * Connect to SQLCipher database with auto-reconnect
      */
-    async connect() {
+    async connect(retries = 3) {
         return new Promise((resolve, reject) => {
             try {
                 // Ensure data directory exists
                 const dataDir = path.dirname(this.dbPath);
-                if (!require('fs').existsSync(dataDir)) {
-                    require('fs').mkdirSync(dataDir, { recursive: true });
+                if (!fs.existsSync(dataDir)) {
+                    fs.mkdirSync(dataDir, { recursive: true });
                 }
-
                 // Create database connection with encryption
                 this.db = new sqlite3.Database(this.dbPath, (err) => {
                     if (err) {
-                        reject(new Error(`Database connection failed: ${err.message}`));
+                        if (retries > 0) {
+                            setTimeout(() => this.connect(retries - 1).then(resolve).catch(reject), 1000);
+                        } else {
+                            this.emit('error', err);
+                            reject(new Error(`Database connection failed: ${err.message}`));
+                        }
                         return;
                     }
-
                     // Set encryption key
                     this.db.run(`PRAGMA key = '${this.encryptionKey}'`, (err) => {
                         if (err) {
+                            this.emit('error', err);
                             reject(new Error(`Database encryption failed: ${err.message}`));
                             return;
                         }
-
                         // Initialize database schema
                         this.initializeSchema()
                             .then(() => {
                                 this.isConnected = true;
+                                this.emit('connect');
                                 console.log('✅ Database connected and encrypted');
                                 resolve();
                             })
-                            .catch(reject);
+                            .catch((e) => {
+                                this.emit('error', e);
+                                reject(e);
+                            });
                     });
                 });
-
                 // Enable foreign keys
                 this.db.run('PRAGMA foreign_keys = ON');
-
             } catch (error) {
+                this.emit('error', error);
                 reject(error);
             }
         });
@@ -145,7 +154,7 @@ class DatabaseManager {
     }
 
     /**
-     * Execute a query with parameters
+     * Run a query and log slow queries
      */
     async run(sql, params = []) {
         return new Promise((resolve, reject) => {
@@ -153,9 +162,18 @@ class DatabaseManager {
                 reject(new Error('Database not connected'));
                 return;
             }
-
+            const start = Date.now();
             this.db.run(sql, params, function(err) {
+                const duration = Date.now() - start;
+                if (duration > 200) {
+                    try {
+                        fs.appendFileSync('logs/slow-queries.log', `[${new Date().toISOString()}] ${sql} (${duration}ms)\n`);
+                    } catch (e) {}
+                }
                 if (err) {
+                    try {
+                        fs.appendFileSync('logs/db-errors.log', `[${new Date().toISOString()}] ${err.message}\n`);
+                    } catch (e) {}
                     reject(err);
                 } else {
                     resolve({
@@ -291,6 +309,60 @@ class DatabaseManager {
     async blacklistToken(tokenHash, userId, expiresAt) {
         const sql = 'INSERT INTO blacklisted_tokens (token_hash, user_id, expires_at) VALUES (?, ?, ?)';
         return this.run(sql, [tokenHash, userId, expiresAt]);
+    }
+
+    /**
+     * Backup the encrypted database
+     */
+    async backup(backupPath) {
+        return new Promise((resolve, reject) => {
+            const source = fs.createReadStream(this.dbPath);
+            const dest = fs.createWriteStream(backupPath);
+            source.pipe(dest);
+            dest.on('finish', resolve);
+            dest.on('error', reject);
+        });
+    }
+
+    /**
+     * Restore the encrypted database from backup
+     */
+    async restore(backupPath) {
+        return new Promise((resolve, reject) => {
+            const source = fs.createReadStream(backupPath);
+            const dest = fs.createWriteStream(this.dbPath);
+            source.pipe(dest);
+            dest.on('finish', resolve);
+            dest.on('error', reject);
+        });
+    }
+
+    /**
+     * Rotate the database encryption key
+     */
+    async rotateEncryptionKey(newKey) {
+        return new Promise((resolve, reject) => {
+            this.db.run(`PRAGMA rekey = '${newKey}'`, (err) => {
+                if (err) {
+                    reject(new Error(`Key rotation failed: ${err.message}`));
+                } else {
+                    this.encryptionKey = newKey;
+                    resolve();
+                }
+            });
+        });
+    }
+
+    /**
+     * Health check for the database
+     */
+    async healthCheck() {
+        try {
+            await this.get('SELECT 1');
+            return { status: 'ok' };
+        } catch (err) {
+            return { status: 'error', error: err.message };
+        }
     }
 
     /**
